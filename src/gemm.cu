@@ -28,11 +28,16 @@ __global__ void decode_fp8_to_half(const uint8_t* A, const uint8_t* B,
     if (i < M * K) A16[i] = tensor_bridge::fp8_e4m3_to_half(A[i]);
     if (i < K * N) { int k = i / N, col = i % N; B16[col * K + k] = tensor_bridge::fp8_e4m3_to_half(B[i]); }
 }
+// Decode FP8 -> INT8 for IMMA. WARNING: int8 only holds [-128,127], so the input
+// must be scaled into that range. A fixed *8.0 only works for |v|<=16; E4M3 goes to
+// 448, which would overflow (448*8=3584). Pass an explicit scale = 127/maxabs (a
+// per-tensor scale) and dequantize with the same scale. See docs/phase4-*.
 __global__ void decode_fp8_to_int8(const uint8_t* A, const uint8_t* B,
-                                   int8_t* A8, int8_t* B8, int M, int N, int K) {
+                                   int8_t* A8, int8_t* B8, int M, int N, int K,
+                                   float scale) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < M * K) A8[i] = (int8_t)__float2int_rn(__half2float(tensor_bridge::fp8_e4m3_to_half(A[i])) * 8.0f);
-    if (i < K * N) { int k = i / N, col = i % N; B8[col * K + k] = (int8_t)__float2int_rn(__half2float(tensor_bridge::fp8_e4m3_to_half(B[i])) * 8.0f); }
+    if (i < M * K) A8[i] = (int8_t)__float2int_rn(__half2float(tensor_bridge::fp8_e4m3_to_half(A[i])) * scale);
+    if (i < K * N) { int k = i / N, col = i % N; B8[col * K + k] = (int8_t)__float2int_rn(__half2float(tensor_bridge::fp8_e4m3_to_half(B[i])) * scale); }
 }
 
 // ---- GEMM kernels (load_matrix_sync + col_major B, store to global) ---------

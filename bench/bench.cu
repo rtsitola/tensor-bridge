@@ -18,7 +18,7 @@ constexpr int TILE = 16;
 
 // declared in src/gemm.cu
 __global__ void decode_fp8_to_half(const uint8_t*, const uint8_t*, half*, half*, int, int, int);
-__global__ void decode_fp8_to_int8(const uint8_t*, const uint8_t*, int8_t*, int8_t*, int, int, int);
+__global__ void decode_fp8_to_int8(const uint8_t*, const uint8_t*, int8_t*, int8_t*, int, int, int, float);
 __global__ void gemm_fp16_wmma(const half*, const half*, float*, int, int, int);
 __global__ void gemm_int8_wmma(const int8_t*, const int8_t*, int32_t*, int, int, int);
 
@@ -70,7 +70,7 @@ int main() {
     printf("Path: Ampere — decode FP8->INT8 + WMMA INT8 tensor cores (IMMA)\n");
     int8_t *A8,*B8; int32_t *Di;
     CHECK(cudaMalloc(&A8,M*K)); CHECK(cudaMalloc(&B8,K*N)); CHECK(cudaMalloc(&Di,M*N*4));
-    decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K);
+    decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K, 8.0f);
     CHECK(cudaDeviceSynchronize());
     cudaEventRecord(t0);
     for(int it=0;it<iters;it++) gemm_int8_wmma<<<grid,32>>>(A8,B8,Di,M,N,K);

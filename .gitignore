@@ -4,9 +4,10 @@
 *.out
 *.cubin
 *.ptx
-bench_turing
-bench_ampere
+bench_*
 build/
+*.lib
+*.exp
 
 # CMake
 CMakeCache.txt

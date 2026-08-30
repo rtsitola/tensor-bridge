@@ -84,6 +84,10 @@ Frobenius error reported). See `bench/bench_formats.cu`.
 
 ## Measured (256×256×256, decode + GEMM, avg of 50 runs, verified vs FP32)
 
+> Note: the `rand ∈ [-1,1]` test distribution means the INT8 path (fixed ×8 scale)
+> never overflows here. The INT8 kernel now takes an explicit `scale` param — pass
+> `127/maxabs` for real weights (E4M3 reaches ±448; a fixed ×8 wraps int8 at |v|>15.9).
+
 **Quadro RTX 6000 (Turing sm_75)** — all decoded → FP16:
 
 | Format | GFLOPS | rel-Frobenius error | mantissa |
@@ -91,14 +95,14 @@ Frobenius error reported). See `bench/bench_formats.cu`.
 | TF32 | 1542 | 0.03% | 10-bit |
 | BF16 | 1120 | 0.21% | 7-bit |
 | FP8 | 1603 | 3.34% | 3-bit |
-| FP4 | 1629 | 37.2% | 1-bit |
+| FP4 | 1575 | 37.2% | 1-bit |
 
 **RTX 3070 Ti (Ampere sm_86)** — decoded → FP16:
 
 | Format | GFLOPS | rel-Frobenius error |
 |---|---|---|
 | FP8 | 1225 | 3.34% |
-| FP4 | 1527 | 37.2% |
+| FP4 | 1896 | 37.2% |
 
 Error scales exactly with format precision (fewer mantissa bits → more error), as
 expected for quantization.

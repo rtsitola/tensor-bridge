@@ -18,12 +18,15 @@
 namespace tensor_bridge {
 
 // ---- FP8 E4M3 -> FP16 --------------------------------------------------------
+// E4M3fn (NVIDIA): NO Inf. Only exp=15,man=7 is NaN; exp15 man0..6 are finite
+// (128..448). max finite = exp15,man6 = 448.
 __device__ __host__ __forceinline__ half fp8_e4m3_to_half(uint8_t f8) {
     uint16_t sign  = (uint16_t)(f8 & 0x80u) << 8;          // sign -> bit15
-    uint16_t exp8  = (f8 & 0x78u);                          // FP8 exponent (4 bits)
-    if (exp8 == 0) return __ushort_as_half(sign);           // denormal/zero -> +-0 (approx)
-    uint16_t man   = (f8 & 0x07u) << 7;                     // mantissa -> FP16 top bits
-    uint16_t exp16 = (uint16_t)((exp8 >> 3) + 8) << 10;     // re-bias +8
+    uint8_t expE   = (f8 >> 3) & 0x0Fu;                    // 4-bit exponent VALUE
+    uint16_t man   = (f8 & 0x07u) << 7;                    // mantissa -> FP16 top bits
+    if (expE == 0) return __ushort_as_half(sign);          // denormal/zero -> +-0 (approx)
+    if (expE == 15 && (f8 & 0x07u) == 0x07u) return __ushort_as_half(sign | 0x7E00u); // exp15,man7 -> NaN
+    uint16_t exp16 = (uint16_t)(expE + 8) << 10;           // re-bias: FP16 field = E+8
     return __ushort_as_half(sign | exp16 | man);
 }
 
@@ -49,12 +52,12 @@ __host__ __device__ __forceinline__ uint8_t fp32_to_fp8_e4m3(float v) {
     uint16_t man3 = (man + r) >> 7;                      // now 3 mantissa bits
 
     uint8_t sign = (u >> 8) & 0x80u;
-    int exp8 = ((u >> 10) & 0x1Fu) - 15 + 7;             // FP16 exp -> FP8 exp (bias 7)
+    int expE = ((u >> 10) & 0x1Fu) - 15 + 7;               // FP16 exp -> FP8 exp value (bias 7)
     // mantissa overflow: carry into exponent
-    if (man3 >= 8) { man3 = 0; exp8++; }
-    if (exp8 <= 0) return sign;                          // denormal/zero -> +-0
-    if (exp8 >= 15) exp8 = 15;                           // clamp to max
-    return sign | (uint8_t)(exp8 << 3) | (uint8_t)man3;
+    if (man3 >= 8) { man3 = 0; expE++; }
+    if (expE <= 0) return sign;                            // denormal/zero -> +-0
+    if (expE > 15) { expE = 15; man3 = 6; }                // clamp to max E4M3 = 448 (exp15,man6)
+    return sign | (uint8_t)(expE << 3) | (uint8_t)man3;
 }
 
 // ---- FP32 -> FP8 E5M2 (host-side quantize, RNE) ------------------------------

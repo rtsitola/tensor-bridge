@@ -28,18 +28,6 @@ __device__ __host__ __forceinline__ half bf16_to_half(uint16_t bf) {
     return __ushort_as_half(sign | (uint16_t)(e << 10) | man);
 }
 
-// ---- FP16 -> BF16 (round-to-nearest-even on the dropped mantissa bits) ------
-__device__ __host__ __forceinline__ uint16_t half_to_bf16(half h) {
-    uint16_t u = __half_as_ushort(h);
-    uint16_t man = u & 0x03FFu;              // FP16 10-bit mantissa
-    uint16_t lsb = (man >> 3) & 1u;          // bit that becomes the LSB after truncation
-    uint16_t round_bit = 0x0004u;            // halfway point (0.5 * 2^3)
-    uint16_t sticky = man & 0x0007u;         // the 3 bits being dropped
-    uint16_t r = 0;
-    if (sticky > round_bit || (sticky == round_bit && lsb)) r = 0x0008u; // RNE
-    return (u + r) & 0xFFE0u;                // drop low 3 mantissa bits
-}
-
 // ---- FP32 -> BF16 ------------------------------------------------------------
 __host__ __device__ __forceinline__ uint16_t fp32_to_bf16(float v) {
     uint32_t u = f2u(v);
@@ -47,6 +35,13 @@ __host__ __device__ __forceinline__ uint16_t fp32_to_bf16(float v) {
     uint16_t round_bit = 0x7FFFu + lsb;
     u += round_bit;
     return (uint16_t)(u >> 16);
+}
+
+// ---- FP16 -> BF16 (correct: expand to FP32, then RNE-drop 16 mantissa bits) ----
+// A true BF16 has an 8-bit exponent (bias 127), so we must route through FP32 —
+// NOT just drop low FP16 mantissa bits (that would keep the 5-bit FP16 exponent).
+__host__ __device__ __forceinline__ uint16_t half_to_bf16(half h) {
+    return fp32_to_bf16(__half2float(h));
 }
 
 } // namespace tensor_bridge

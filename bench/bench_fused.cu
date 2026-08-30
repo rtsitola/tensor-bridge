@@ -23,7 +23,7 @@ constexpr int TILE = 16;
 
 // non-fused (src/gemm.cu)
 __global__ void decode_fp8_to_half(const uint8_t*, const uint8_t*, half*, half*, int, int, int);
-__global__ void decode_fp8_to_int8(const uint8_t*, const uint8_t*, int8_t*, int8_t*, int, int, int);
+__global__ void decode_fp8_to_int8(const uint8_t*, const uint8_t*, int8_t*, int8_t*, int, int, int, float);
 __global__ void gemm_fp16_wmma(const half*, const half*, float*, int, int, int);
 __global__ void gemm_int8_wmma(const int8_t*, const int8_t*, int32_t*, int, int, int);
 // fused (src/gemm_fused.cu)
@@ -94,7 +94,7 @@ int main() {
     CHECK(cudaMalloc(&Di,M*N*4)); CHECK(cudaMalloc(&Di2,M*N*4));
     cudaEventRecord(t0);
     for(int it=0;it<iters;it++){
-        decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K);
+        decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K, 8.0f);
         gemm_int8_wmma<<<grid,32>>>(A8,B8,Di,M,N,K);
     }
     cudaEventRecord(t1); cudaEventSynchronize(t1);

@@ -118,10 +118,10 @@ by recovering the format's dynamic range (naked E2M1 on [-1,1] collapses to
 `rand ∈ [-1,1]` uniform tensors — real weights are usually ≪ 1 and better behaved.
 For FP4, backward optimization is the proven path to usable quality (see below).
 
-> **FP4: backward optimization beats scaling (measured).** On homogeneous Gaussian data,
-> naive FP4 is ~70% and block scales (NVFP4/MXFP4) don't help (69.9% → 69.7%). But
-> optimizing the weights for *output* fidelity (backward, GPTQ/AdaRound-style) gives
-> **15.4%** (4.5× better). See
+> **FP4: backward optimization helps modestly (measured).** On Gaussian data, naive FP4
+> with per-tensor scale is ~12% error; backward optimization (output-fidelity objective,
+> GPTQ/AdaRound-style) brings it to ~8.5% (1.4×). The bigger payoff is on heterogeneous
+> (LLM-like) weights. See
 > [docs/backward-fp4-quantization.md](docs/backward-fp4-quantization.md) and
 > [docs/quantization-limits.md](docs/quantization-limits.md).
 

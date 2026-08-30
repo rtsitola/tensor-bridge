@@ -19,11 +19,19 @@ On Gaussian matrices (A~N(0,0.2), B~N(0,0.5)), FP4 E2M1 with per-tensor scale:
 
 | Method | GEMM rel-Frobenius error |
 |---|---|
-| Naive quantize A (`qA@B`) | 72.0% |
-| **Backward-optimized A** (`A_opt@B`) | **12.8%** |
-| Improvement | **5.6× better** |
+| Naive quantize A (`qA@B`) | 12.1% |
+| **Backward-optimized A** (`A_opt@B`) | **8.5%** |
+| Improvement | **1.4× better** |
 
-Per-row: error drops from ~4.3 to ~0.7 (6×). Confirmed on K=64 and K=256.
+> **Correction note:** earlier drafts of this doc reported 72% naive / 15% backward
+> (5.6×) from a sign bug in the Python validation code (quantizing signed values against
+> the positive grid without taking |x| first). Fixed: naive is ~12%, backward ~8.5%
+> (1.4×). The CUDA kernel (`fp32_to_fp4_e2m1`) uses `fabsf(v)` and was always correct;
+> the README benchmark numbers (37.2% / 24.9% / 11%) are unaffected and valid.
+
+The backward gain is real but modest (~1.4×) on these distributions. Its biggest value
+is on **heterogeneous** weights (LLM-like channel variance), where per-row/block scales
+matter more.
 
 ## How it works
 
@@ -42,18 +50,20 @@ so it's exactly a valid FP4 tensor with per-tensor scale `s`.
 
 ## Why it's significant
 
-- Naive FP4 is ~72% error on Gaussian data (grid gap near 0: 0.5→1.0 is 2×).
-- This backward approach recovers **5.6×** of that, making FP4 genuinely usable.
+- FP4 naive with per-tensor scale is ~12% error on Gaussian data; backward optimization
+  brings it to ~8.5%.
 - It's the same principle as **GPTQ** (minimize output error, not weight error) and
   **AdaRound** (learn the rounding), applied to the FP4 grid constraint.
-- Cost is modest: ~3.4s for a 256³ GEMM on CPU (coordinate descent), one-time per
+- Cost is modest: ~2s for a 128³ GEMM on CPU (coordinate descent), one-time per
   weight matrix (weights are quantized offline, inference stays cheap).
+- The real payoff is on heterogeneous weights (LLM-like), where the per-row refinement
+  matters more than on homogeneous Gaussian data.
 
 ## Status
 
-Validated in simulation (Python). This is the most promising contribution of the repo
-so far — it directly addresses why "FP4 is unusable" (the 70% problem) by changing the
-optimization objective from *weight fidelity* to *output fidelity*.
+Validated in simulation (Python, `python/tensor_bridge_fp4.py` + `demo.py`). It applies
+the published GPTQ/AdaRound/LLM-FP4 principle (output-fidelity objective) to the FP4
+grid constraint with a clean, cheap, offline coordinate-descent solver.
 
 ## Cross-check
 

@@ -11,22 +11,33 @@ Ampere (sm_86), cross-checked by Grok and Claude reviews.
 | BF16 | 0.21% | 0.15% | — | nothing needed |
 | FP8 | 3.34% | 2.37% | 2.54% | little (scale≈448 near-identity on [-1,1]) |
 | FP4 | 37.2% | 24.9% | 11.0% | 2.3× — recovers dynamic range |
-| FP4 (block scale) | — | ~71% | — | **nothing** (see below) |
+| FP4 (block scale) | — | see below | — | distribution-dependent |
 
-## FP4 has a hard 4-bit precision limit — scaling can't fix it
+## FP4 error is distribution-dependent, not a hard 70% limit
 
-Measured on Gaussian matrices: FP4 error stays ~70% regardless of scale strategy —
-per-tensor 71.3%, per-row 71.4%, block-32 71.2%, block-16 71.1%. A "perfect" per-element
-scale also gives ~72%.
+Measured with the OCP E2M1 grid `{0, 0.5, 1, 1.5, 2, 3, 4, 6}` (per-tensor scale):
 
-**Why:** the E2M1 grid has only 8 magnitudes `{0, 0.5, 1, 1.5, 2, 3, 4, 6}` with a
-relative ratio of **2.0 between 0.5 and 1.0** (50% spacing). Scaling shifts the grid but
-does not densify it. The error is the intrinsic 4-bit mantissa resolution, not a range
-problem.
+| Distribution | FP4 GEMM error |
+|---|---|
+| A~U(0,6), B~U(0,6) | **0.9%** |
+| A~U(-1,1), B~U(-1,1) | 74.3% |
+| A~N(0,1), B~N(0,1) | 72.7% |
+| A~N(0,0.2), B~N(0,0.5) | 72.2% |
 
-**Implication:** NVFP4 / OCP MXFP4 is only usable for **weights that are pre-quantized to
-align with the grid** (AWQ/GPTQ calibration), never for arbitrary/continuous data. Don't
-ship "FP4 precision" numbers as if block scaling will fix them — it won't.
+**The 70% figure is NOT intrinsic** — it's an artifact of data concentrated near 0,
+where the E2M1 grid has its largest relative gap (0.5 → 1.0, ratio 2.0). When data
+covers the grid (U(0,6)), FP4 gives ~1%. The grid has only 8 magnitudes, but the
+*problem* is range-matching, not the grid itself.
+
+**Why NVFP4/MXFP4 use block scales:** they make each block cover its local range, so
+every block behaves like the favorable U(0,6) case. Block scale (16 or 32 elements)
+genuinely helps when data is concentrated — it re-anchors the grid locally. This
+corrects an earlier finding in this doc that claimed scaling cannot help FP4: it can,
+specifically via block scales on data concentrated near zero.
+
+**Caveat:** with a per-tensor scale on near-zero data, FP4 is poor (70%). Use block
+scales, or ensure the tensor range covers the grid. On grid-covered data, FP4 is
+~1% — genuinely usable.
 
 ## Per-channel scale helps FP8 a little, only on heterogeneous channels
 

@@ -118,10 +118,11 @@ by recovering the format's dynamic range (naked E2M1 on [-1,1] collapses to
 `rand ∈ [-1,1]` uniform tensors — real weights are usually ≪ 1 and better behaved.
 FP4 needs a block scale (OCP MXFP4 / NVFP4) to go further.
 
-> **Important limit (measured):** scaling does NOT fix FP4. Per-tensor, per-channel,
-> and per-block scales all leave FP4 at ~70% error on continuous data — the E2M1 grid
-> (8 magnitudes, 50% relative spacing between 0.5 and 1) is the limit, not the range.
-> See [docs/quantization-limits.md](docs/quantization-limits.md).
+> **FP4 is distribution-dependent (measured):** per-tensor scale gives ~1% error when
+> data covers the E2M1 grid (e.g. U(0,6)) but ~70% when data is concentrated near 0
+> (where the grid gap 0.5→1 is largest). Block scales (NVFP4/MXFP4) re-anchor the grid
+> locally and genuinely help near-zero data. See
+> [docs/quantization-limits.md](docs/quantization-limits.md).
 
 ## The compiler bug we documented
 

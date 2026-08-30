@@ -17,14 +17,15 @@
 
 namespace tensor_bridge {
 
-// TF32 (stored as uint32 with low 13 mantissa bits already dropped) -> FP16
+// TF32 (uint32, low 13 mantissa bits already dropped) -> FP16
+// TF32 = FP32 with 10-bit mantissa: bias 127 -> FP16 bias 15 = -112. Denormal -> +-0.
 __device__ __host__ __forceinline__ half tf32_to_half(uint32_t tf32) {
-    uint32_t sign = (tf32 >> 16) & 0x8000u;
-    uint32_t exp  = (tf32 >> 13) & 0x7C00u;   // 8-bit exp -> 5-bit exp field
-    uint32_t man  = (tf32 >> 13) & 0x03FFu;   // 10-bit mantissa kept
-    uint32_t h16  = sign | exp | man;
-    if ((h16 & 0x7C00u) == 0x7C00u) h16 = sign | 0x7C00u; // clamp overflow -> inf
-    return __ushort_as_half((uint16_t)h16);
+    uint16_t sign = (uint16_t)((tf32 >> 16) & 0x8000u);
+    int e = ((tf32 >> 23) & 0xFFu) - 112;           // re-bias 127 -> 15
+    uint16_t man = (uint16_t)((tf32 >> 13) & 0x03FFu); // 10-bit mantissa
+    if (e <= 0) return __ushort_as_half(sign);      // denormal -> +-0 (approx)
+    if (e >= 31) return __ushort_as_half(sign | 0x7C00u); // overflow -> +-inf
+    return __ushort_as_half(sign | (uint16_t)(e << 10) | man);
 }
 
 // FP32 -> TF32 (round-to-nearest-even, drop 13 mantissa bits)

@@ -18,17 +18,14 @@
 namespace tensor_bridge {
 
 // ---- BF16 -> FP16 (lossy: clamp out-of-range, keep top 7 mantissa bits) ------
+// BF16 bias 127, FP16 bias 15 -> exponent offset = -112. Denormals -> +-0 (approx).
 __device__ __host__ __forceinline__ half bf16_to_half(uint16_t bf) {
-    uint16_t sign = (bf & 0x8000u);          // sign -> bit15 (same position)
-    uint16_t exp  = (bf & 0x7F80u) >> 3;     // 8-bit exp -> 5-bit exp (bias 127 -> 15)
-    uint16_t man  = (bf & 0x007Fu) << 3;     // 7-bit mantissa -> FP16 top 7 of 10 bits
-    uint16_t h16  = sign | exp | man;
-    // clamp: FP16 max normal exponent field is 0x7C00 (exp 31 = inf/nan)
-    if ((h16 & 0x7C00u) == 0x7C00u) {
-        // overflow -> +-inf, keep sign
-        h16 = sign | 0x7C00u;
-    }
-    return __ushort_as_half(h16);
+    uint16_t sign = (bf & 0x8000u);
+    int e = ((bf >> 7) & 0xFFu) - 112;             // re-bias 127 -> 15
+    uint16_t man = (bf & 0x007Fu) << 3;            // 7-bit mantissa -> FP16 top 7
+    if (e <= 0) return __ushort_as_half(sign);     // denormal -> +-0 (approx)
+    if (e >= 31) return __ushort_as_half(sign | 0x7C00u); // overflow -> +-inf
+    return __ushort_as_half(sign | (uint16_t)(e << 10) | man);
 }
 
 // ---- FP16 -> BF16 (round-to-nearest-even on the dropped mantissa bits) ------

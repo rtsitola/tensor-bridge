@@ -63,7 +63,7 @@ int main() {
         double e=(double)hD[i*N+j]-hRef[i*N+j]; sse+=e*e; snorm+=(double)hRef[i*N+j]*hRef[i*N+j];
     }
     printf("Result: %.1f us/iter, %.2f GFLOPS, rel-Frobenius err %.4f%%\n",
-           ms/iters*1000, 2.0*M*N*K/(ms/1000.0)/1e9, 100.0*sqrt(sse/snorm));
+           ms/iters*1000, 2.0*M*N*K/(ms/1000.0/iters)/1e9, 100.0*sqrt(sse/snorm));
     cudaFree(A16); cudaFree(B16); cudaFree(Df);
 #endif
 #ifdef TARGET_SM86
@@ -83,7 +83,7 @@ int main() {
         double v=hDi[i*N+j]/64.0, e=v-hRef[i*N+j]; sse+=e*e; snorm+=(double)hRef[i*N+j]*hRef[i*N+j];
     }
     printf("Result: %.1f us/iter, %.2f GFLOPS, rel-Frobenius err %.4f%%\n",
-           ms/iters*1000, 2.0*M*N*K/(ms/1000.0)/1e9, 100.0*sqrt(sse/snorm));
+           ms/iters*1000, 2.0*M*N*K/(ms/1000.0/iters)/1e9, 100.0*sqrt(sse/snorm));
     cudaFree(A8); cudaFree(B8); cudaFree(Di);
 #endif
     if (ms<=0) { printf("No path compiled! use -DTARGET_SM75 or -DTARGET_SM86\n"); return 1; }

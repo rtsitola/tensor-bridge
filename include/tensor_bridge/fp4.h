@@ -48,6 +48,16 @@ __host__ __device__ __forceinline__ uint8_t half_to_fp4_e2m1(half h) {
     return (uint8_t)((sign >> 1) | ((exp + 1) << 1) | man);
 }
 
+// FP32 -> FP4 E2M1 (nearest among the 16 representable values), host-safe
+__host__ __device__ __forceinline__ uint8_t fp32_to_fp4_e2m1(float v) {
+    static const float vals[8] = {0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f};
+    int sign = v < 0.0f ? 1 : 0;
+    float a = fabsf(v);
+    int best = 0; float bd = fabsf(a - vals[0]);
+    for (int i = 1; i < 8; i++) { float d = fabsf(a - vals[i]); if (d < bd) { bd = d; best = i; } }
+    return (uint8_t)((sign << 3) | best);   // [s e1 e0 m0] matches kFp4E2M1LUT
+}
+
 } // namespace tensor_bridge
 
 #endif // TENSOR_BRIDGE_FP4_H

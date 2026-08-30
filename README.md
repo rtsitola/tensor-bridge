@@ -57,19 +57,35 @@ docs/                    nvcc-fill-fragment-bug.md, phase3-fusion-findings.md
 
 ```bash
 # Turing (Quadro RTX 6000, sm_75) — FP8 → FP16 path
-nvcc -O3 -arch=sm_75 -DTARGET_SM75 -o bench_turing bench/bench.cu
+nvcc -O3 -arch=sm_75 -DTARGET_SM75 -Iinclude -o bench_turing bench/bench.cu src/gemm.cu
 # Ampere (RTX 3070 Ti, sm_86) — FP8 → INT8 path
-nvcc -O3 -arch=sm_86 -DTARGET_SM86 -o bench_ampere bench/bench.cu
+nvcc -O3 -arch=sm_86 -DTARGET_SM86 -Iinclude -o bench_ampere bench/bench.cu src/gemm.cu
+
+# Real format test — every format on the right GPU (decode + GEMM, verified vs FP32)
+nvcc -O3 -arch=sm_75 -DTARGET_SM75 -Iinclude -o bench_fmts_turing bench/bench_formats.cu src/gemm.cu
+nvcc -O3 -arch=sm_86 -DTARGET_SM86 -Iinclude -o bench_fmts_ampere bench/bench_formats.cu src/gemm.cu
 ```
 
-## Measured (256×256×256 GEMM)
+## Measured (256×256×256, decode + GEMM, verified vs FP32)
 
-| GPU | Path | GFLOPS | rel-Frobenius error |
+**Quadro RTX 6000 (Turing sm_75)** — all decoded → FP16:
+
+| Format | GFLOPS | rel-Frobenius error | mantissa |
 |---|---|---|---|
-| Quadro RTX 6000 (Turing) | FP8 → FP16 WMMA | 52.7 | 8.6% |
-| RTX 3070 Ti (Ampere) | FP8 → INT8 WMMA | 98.7 | 12.6% |
+| TF32 | 1542 | 0.03% | 10-bit |
+| BF16 | 1120 | 0.21% | 7-bit |
+| FP8 | 1532 | 8.60% | 3-bit |
+| FP4 | 1629 | 37.2% | 1-bit |
 
-Error is the expected 8-bit quantization range (reference = FP32).
+**RTX 3070 Ti (Ampere sm_86)** — decoded → FP16:
+
+| Format | GFLOPS | rel-Frobenius error |
+|---|---|---|
+| FP8 | 1225 | 8.60% |
+| FP4 | 1527 | 37.2% |
+
+Error scales exactly with format precision (fewer mantissa bits → more error), as
+expected for quantization.
 
 ## The compiler bug we documented
 

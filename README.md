@@ -118,6 +118,11 @@ by recovering the format's dynamic range (naked E2M1 on [-1,1] collapses to
 `rand ∈ [-1,1]` uniform tensors — real weights are usually ≪ 1 and better behaved.
 FP4 needs a block scale (OCP MXFP4 / NVFP4) to go further.
 
+> **Important limit (measured):** scaling does NOT fix FP4. Per-tensor, per-channel,
+> and per-block scales all leave FP4 at ~70% error on continuous data — the E2M1 grid
+> (8 magnitudes, 50% relative spacing between 0.5 and 1) is the limit, not the range.
+> See [docs/quantization-limits.md](docs/quantization-limits.md).
+
 ## The compiler bug we documented
 
 Compiling `wmma::fill_fragment()` on **input** fragments (`matrix_a` / `matrix_b`)

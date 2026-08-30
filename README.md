@@ -116,12 +116,13 @@ inference case) roughly halves the error vs quantizing both. A per-tensor scale
 by recovering the format's dynamic range (naked E2M1 on [-1,1] collapses to
 {0, ±0.5, ±1}). FP8 barely moves (scale≈448 is near-identity on [-1,1]). These are
 `rand ∈ [-1,1]` uniform tensors — real weights are usually ≪ 1 and better behaved.
-FP4 needs a block scale (OCP MXFP4 / NVFP4) to go further.
+For FP4, backward optimization is the proven path to usable quality (see below).
 
-> **FP4 is distribution-dependent (measured):** per-tensor scale gives ~1% error when
-> data covers the E2M1 grid (e.g. U(0,6)) but ~70% when data is concentrated near 0
-> (where the grid gap 0.5→1 is largest). Block scales (NVFP4/MXFP4) re-anchor the grid
-> locally and genuinely help near-zero data. See
+> **FP4: backward optimization beats scaling (measured).** On homogeneous Gaussian data,
+> naive FP4 is ~70% and block scales (NVFP4/MXFP4) don't help (69.9% → 69.7%). But
+> optimizing the weights for *output* fidelity (backward, GPTQ/AdaRound-style) gives
+> **15.4%** (4.5× better). See
+> [docs/backward-fp4-quantization.md](docs/backward-fp4-quantization.md) and
 > [docs/quantization-limits.md](docs/quantization-limits.md).
 
 ## The compiler bug we documented

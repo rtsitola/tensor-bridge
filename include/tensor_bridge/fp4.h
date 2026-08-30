@@ -42,19 +42,6 @@ __device__ __forceinline__ half2 fp4_e2m1_byte_to_half2(uint8_t packed) {
     return h;
 }
 
-// FP16 -> FP4 E2M1 (round-to-nearest, for reference quantize)
-// value = (1 + m) * 2^(e-1);  e in {0,1,2,3}, m in {0,1}. Max magnitude 6.
-__host__ __device__ __forceinline__ uint8_t half_to_fp4_e2m1(half h) {
-    uint16_t u = __half_as_ushort(h);
-    uint16_t sign = (u >> 8) & 0x80u;
-    int exp  = ((u >> 10) & 0x1Fu) - 15;      // unbiased exponent
-    int man  = (u >> 7) & 0x01u;              // TOP FP16 mantissa bit (the only one E2M1 keeps)
-    if (exp < -1) return (uint8_t)(sign ? 0x8 : 0x0);   // -> ±0
-    if (exp > 2)  return (uint8_t)(sign ? 0xF : 0x7);   // clamp to ±6 (max)
-    // exp in [-1, 2] -> fp4 exp field = exp + 1 (bias 1), man = fp4 mantissa bit
-    return (uint8_t)((sign >> 1) | ((exp + 1) << 1) | man);
-}
-
 // FP32 -> FP4 E2M1 (nearest among the 16 representable values), host-safe
 __host__ __device__ __forceinline__ uint8_t fp32_to_fp4_e2m1(float v) {
     static const float vals[8] = {0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f};
@@ -63,6 +50,13 @@ __host__ __device__ __forceinline__ uint8_t fp32_to_fp4_e2m1(float v) {
     int best = 0; float bd = fabsf(a - vals[0]);
     for (int i = 1; i < 8; i++) { float d = fabsf(a - vals[i]); if (d < bd) { bd = d; best = i; } }
     return (uint8_t)((sign << 3) | best);   // [s e1 e0 m0] matches kFp4E2M1LUT
+}
+
+// FP16 -> FP4 E2M1 (round-to-nearest, for reference quantize).
+// NVFP4/OCP E2M1 is a TABLE, not a clean formula: index0=0, 1=0.5, 2=1, ...
+// 7=6 (no Inf/NaN). So encode by nearest-of-8-magnitudes (reuse fp32_to_fp4_e2m1).
+__host__ __device__ __forceinline__ uint8_t half_to_fp4_e2m1(half h) {
+    return fp32_to_fp4_e2m1(__half2float(h));
 }
 
 } // namespace tensor_bridge

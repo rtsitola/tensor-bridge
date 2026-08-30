@@ -64,6 +64,13 @@ __global__ void run_tests(int* fails_out) {
     CHECKVAL(f(fp4_e2m1_to_half(fp32_to_fp4_e2m1(1.0f))) == 1.0f, "fp4 rt 1.0");
     CHECKVAL(f(fp4_e2m1_to_half(fp32_to_fp4_e2m1(5.5f))) == 6.0f, "fp4 rt 5.5->6.0"); // unambiguous
 
+    // ---- half_to_fp4_e2m1 (separate helper, exercises the sign bit) ----
+    CHECKVAL(f(fp4_e2m1_to_half(half_to_fp4_e2m1(__float2half(1.0f)))) == 1.0f, "half_to_fp4 +1.0");
+    CHECKVAL(f(fp4_e2m1_to_half(half_to_fp4_e2m1(__float2half(-1.0f)))) == -1.0f, "half_to_fp4 -1.0 (sign bit 3)");
+    CHECKVAL(f(fp4_e2m1_to_half(half_to_fp4_e2m1(__float2half(-2.0f)))) == -2.0f, "half_to_fp4 -2.0");
+    CHECKVAL(f(fp4_e2m1_to_half(half_to_fp4_e2m1(__float2half(0.5f)))) == 0.5f, "half_to_fp4 +0.5");
+    CHECKVAL(f(fp4_e2m1_to_half(half_to_fp4_e2m1(__float2half(-5.0f)))) == -4.0f, "half_to_fp4 -5.0->-4.0 (nearest, tie)");
+
     // ---- TF32 decode ----
     CHECKVAL(f(tf32_to_half(0x3F800000u)) == 1.0f, "tf32 +1.0");
     CHECKVAL(f(tf32_to_half(0x40000000u)) == 2.0f, "tf32 +2.0");

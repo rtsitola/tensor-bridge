@@ -68,9 +68,14 @@ int main() {
 #endif
 #ifdef TARGET_SM86
     printf("Path: Ampere — decode FP8->INT8 + WMMA INT8 tensor cores (IMMA)\n");
+    // per-tensor scale so int8 [-128,127] is fully used; dequantize with /(scale^2)
+    float maxabs = 0.0f;
+    for (auto &x : hA) maxabs = fmaxf(maxabs, fabsf(x));
+    for (auto &x : hB) maxabs = fmaxf(maxabs, fabsf(x));
+    float iscale = 127.0f / (maxabs > 0.0f ? maxabs : 1.0f);
     int8_t *A8,*B8; int32_t *Di;
     CHECK(cudaMalloc(&A8,M*K)); CHECK(cudaMalloc(&B8,K*N)); CHECK(cudaMalloc(&Di,M*N*4));
-    decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K, 8.0f);
+    decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K, iscale);
     CHECK(cudaDeviceSynchronize());
     cudaEventRecord(t0);
     for(int it=0;it<iters;it++) gemm_int8_wmma<<<grid,32>>>(A8,B8,Di,M,N,K);
@@ -79,8 +84,9 @@ int main() {
     std::vector<int32_t> hDi(M*N);
     CHECK(cudaMemcpy(hDi.data(),Di,M*N*4,cudaMemcpyDeviceToHost));
     double sse=0, snorm=0;
+    float dscale = iscale * iscale;   // undo int8 quantization
     for (int i=0;i<M;i++) for(int j=0;j<N;j++){
-        double v=hDi[i*N+j]/64.0, e=v-hRef[i*N+j]; sse+=e*e; snorm+=(double)hRef[i*N+j]*hRef[i*N+j];
+        double v=hDi[i*N+j]/dscale, e=v-hRef[i*N+j]; sse+=e*e; snorm+=(double)hRef[i*N+j]*hRef[i*N+j];
     }
     printf("Result: %.1f us/iter, %.2f GFLOPS, rel-Frobenius err %.4f%%\n",
            ms/iters*1000, 2.0*M*N*K/(ms/1000.0/iters)/1e9, 100.0*sqrt(sse/snorm));

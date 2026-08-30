@@ -46,6 +46,8 @@ __global__ void run_tests(int* fails_out) {
     CHECKVAL(f(bf16_to_half(0x3F00)) == 0.5f, "bf16 +0.5");
     CHECKVAL(f(bf16_to_half(0x4000)) == 2.0f, "bf16 +2.0");
     CHECKVAL(f(bf16_to_half(0xBF80)) == -1.0f, "bf16 -1.0");
+    CHECKVAL(__hisinf(bf16_to_half(0x7F80)), "bf16 +Inf preserved");
+    CHECKVAL(__hisnan(bf16_to_half(0x7FC0)), "bf16 NaN preserved (not Inf)");
 
     // ---- FP4 decode: all 16 nibbles against spec values ----
     const float fp4_exp[16] = {0,0.5f,1,1.5f,2,3,4,6, -0,-0.5f,-1,-1.5f,-2,-3,-4,-6};
@@ -74,6 +76,8 @@ __global__ void run_tests(int* fails_out) {
     // ---- TF32 decode ----
     CHECKVAL(f(tf32_to_half(0x3F800000u)) == 1.0f, "tf32 +1.0");
     CHECKVAL(f(tf32_to_half(0x40000000u)) == 2.0f, "tf32 +2.0");
+    CHECKVAL(__hisinf(tf32_to_half(0x7F800000u)), "tf32 +Inf preserved");
+    CHECKVAL(__hisnan(tf32_to_half(0x7FC00000u)), "tf32 NaN preserved (not Inf)");
 
     // ---- FP8 roundtrip RNE ----
     CHECKVAL(f(fp8_e4m3_to_half(fp32_to_fp8_e4m3(1.0f))) == 1.0f, "e4m3 rt 1.0");

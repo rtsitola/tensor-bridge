@@ -24,13 +24,23 @@ __device__ __host__ __forceinline__ half bf16_to_half(uint16_t bf) {
     int e = ((bf >> 7) & 0xFFu) - 112;             // re-bias 127 -> 15
     uint16_t man = (bf & 0x007Fu) << 3;            // 7-bit mantissa -> FP16 top 7
     if (e <= 0) return __ushort_as_half(sign);     // denormal -> +-0 (approx)
-    if (e >= 31) return __ushort_as_half(sign | 0x7C00u); // overflow -> +-inf
+    if (e >= 31) {
+        // preserve NaN vs Inf (exp all-ones in BF16 = 0xFF)
+        if (((bf >> 7) & 0xFFu) == 0xFFu && (bf & 0x007Fu)) // BF16 NaN
+            return __ushort_as_half(sign | 0x7E00u);        // FP16 NaN (quiet)
+        return __ushort_as_half(sign | 0x7C00u);   // overflow -> +-Inf
+    }
     return __ushort_as_half(sign | (uint16_t)(e << 10) | man);
 }
 
 // ---- FP32 -> BF16 ------------------------------------------------------------
 __host__ __device__ __forceinline__ uint16_t fp32_to_bf16(float v) {
     uint32_t u = f2u(v);
+    // preserve NaN (mantissa overflow on rounding could turn NaN into Inf)
+    if ((u & 0x7F800000u) == 0x7F800000u) {          // exp all-ones: Inf or NaN
+        if (u & 0x007FFFFFu) return (uint16_t)(u >> 16); // NaN -> keep (BF16 NaN)
+        return (uint16_t)(u >> 16);                  // Inf -> Inf (sign preserved)
+    }
     uint16_t lsb = (u >> 16) & 1u;
     uint16_t round_bit = 0x7FFFu + lsb;
     u += round_bit;

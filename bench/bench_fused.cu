@@ -28,7 +28,7 @@ __global__ void gemm_fp16_wmma(const half*, const half*, float*, int, int, int);
 __global__ void gemm_int8_wmma(const int8_t*, const int8_t*, int32_t*, int, int, int);
 // fused (src/gemm_fused.cu)
 __global__ void gemm_fp8_fused_fp16(const uint8_t*, const uint8_t*, float*, int, int, int);
-__global__ void gemm_fp8_fused_int8(const uint8_t*, const uint8_t*, int32_t*, int, int, int);
+__global__ void gemm_fp8_fused_int8(const uint8_t*, const uint8_t*, int32_t*, int, int, int, float);
 
 int main() {
     cudaDeviceProp prop; cudaGetDeviceProperties(&prop, 0);
@@ -89,19 +89,24 @@ int main() {
 #endif
 #ifdef TARGET_SM86
     printf("Path: Ampere — FP8 -> INT8 (WMMA/IMMA)\n\n");
+    // per-tensor scale so int8 is fully used and dequantize /(scale^2)
+    float maxabs = 0.0f;
+    for (auto &x : hA) maxabs = fmaxf(maxabs, fabsf(x));
+    for (auto &x : hB) maxabs = fmaxf(maxabs, fabsf(x));
+    float iscale = 127.0f / (maxabs > 0.0f ? maxabs : 1.0f);
     int8_t *A8,*B8; int32_t *Di, *Di2;
     CHECK(cudaMalloc(&A8,M*K)); CHECK(cudaMalloc(&B8,K*N));
     CHECK(cudaMalloc(&Di,M*N*4)); CHECK(cudaMalloc(&Di2,M*N*4));
     cudaEventRecord(t0);
     for(int it=0;it<iters;it++){
-        decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K, 8.0f);
+        decode_fp8_to_int8<<<(M*K+255)/256,256>>>(dA,dB,A8,B8,M,N,K, iscale);
         gemm_int8_wmma<<<grid,32>>>(A8,B8,Di,M,N,K);
     }
     cudaEventRecord(t1); cudaEventSynchronize(t1);
     float ms_nf=0; cudaEventElapsedTime(&ms_nf,t0,t1);
     cudaEventRecord(t0);
     for(int it=0;it<iters;it++){
-        gemm_fp8_fused_int8<<<grid,32>>>(dA,dB,Di2,M,N,K);
+        gemm_fp8_fused_int8<<<grid,32>>>(dA,dB,Di2,M,N,K, iscale);
     }
     cudaEventRecord(t1); cudaEventSynchronize(t1);
     float ms_f=0; cudaEventElapsedTime(&ms_f,t0,t1);
@@ -109,12 +114,19 @@ int main() {
 
     printf("non-fused: %.1f us/iter\nfused:     %.1f us/iter\nspeedup:   %.2fx\n\n",
            ms_nf/iters*1000, ms_f/iters*1000, ms_nf/ms_f);
+    // verify BOTH against the FP32 reference (not just each other), via /(scale^2)
     std::vector<int32_t> h1(M*N), h2(M*N);
     CHECK(cudaMemcpy(h1.data(),Di,M*N*4,cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(h2.data(),Di2,M*N*4,cudaMemcpyDeviceToHost));
-    long long maxdiff=0;
-    for(int i=0;i<M*N;i++) maxdiff=std::max(maxdiff, llabs((long long)h1[i]-h2[i]));
+    long long maxdiff=0; double sse=0, snorm=0;
+    float dscale = iscale * iscale;
+    for(int i=0;i<M*N;i++){
+        maxdiff=std::max(maxdiff, llabs((long long)h1[i]-h2[i]));
+        double v = h2[i]/dscale, e = v - hRef[i];
+        sse += e*e; snorm += (double)hRef[i]*hRef[i];
+    }
     printf("fused vs non-fused max abs diff: %lld (expect 0)\n", maxdiff);
+    printf("fused INT8 vs FP32 ref rel-Frobenius err: %.4f%%\n", 100.0*sqrt(sse/snorm));
     cudaFree(A8); cudaFree(B8); cudaFree(Di); cudaFree(Di2);
 #endif
     cudaFree(dA); cudaFree(dB);

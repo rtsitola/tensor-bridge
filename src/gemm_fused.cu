@@ -50,7 +50,7 @@ __global__ void gemm_fp8_fused_fp16(const uint8_t* A, const uint8_t* B, float* D
 
 // ---- Ampere sm_86: FP8 -> INT8 fused GEMM -----------------------------------
 __global__ void gemm_fp8_fused_int8(const uint8_t* A, const uint8_t* B, int32_t* D,
-                                    int M, int N, int K) {
+                                    int M, int N, int K, float scale) {
     __shared__ __align__(16) int8_t a_s[TILE][TILE];
     __shared__ __align__(16) int8_t b_s[TILE][TILE];
     wmma::fragment<wmma::matrix_a,TILE,TILE,TILE,int8_t,wmma::row_major> af;
@@ -61,13 +61,15 @@ __global__ void gemm_fp8_fused_int8(const uint8_t* A, const uint8_t* B, int32_t*
     int row = blockIdx.x * TILE, col = blockIdx.y * TILE, tid = threadIdx.x;
 
     for (int k = 0; k < K; k += TILE) {
-        // decode FP8 -> INT8 (scaled) directly into shared
+        // decode FP8 -> INT8 (scaled) directly into shared.
+        // scale is a per-tensor 127/maxabs so int8 [-128,127] is fully used
+        // without wraparound (E4M3 reaches 448; a fixed *8 would overflow).
         for (int idx = tid; idx < TILE*TILE; idx += blockDim.x) {
             int i = idx / TILE, j = idx % TILE;
             half h = tensor_bridge::fp8_e4m3_to_half(A[(row+i)*K + (k+j)]);
-            a_s[i][j] = (int8_t)__float2int_rn(__half2float(h) * 8.0f);
+            a_s[i][j] = (int8_t)__float2int_rn(__half2float(h) * scale);
             h = tensor_bridge::fp8_e4m3_to_half(B[(k+i)*N + (col+j)]);
-            b_s[j][i] = (int8_t)__float2int_rn(__half2float(h) * 8.0f);
+            b_s[j][i] = (int8_t)__float2int_rn(__half2float(h) * scale);
         }
         __syncthreads();
         wmma::load_matrix_sync(af, &a_s[0][0], TILE);

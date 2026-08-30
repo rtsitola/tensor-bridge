@@ -22,12 +22,13 @@ fly into the closest native tensor-core format.
 
 | Conversion | Target arch | Mechanism | Status |
 |---|---|---|---|
-| FP8 E4M3 → FP16 | sm_75 / sm_86 | `lop3.b32` single-cycle re-bias (Turing) / bit-shift (Ampere) | ✅ proven |
+| FP8 E4M3 → FP16 | sm_75 / sm_86 | bit-manipulation re-bias (12 SASS inst/elem) | ✅ proven |
 | FP8 E4M3 → INT8 | sm_75 / sm_86 | decode LUT + scale → IMMA (int8 tensor cores) | ✅ proven |
 | BF16 → FP16 | sm_75 / sm_70 | zero-extend mantissa | ✅ |
 | FP4 E2M1 → FP16/INT8 | all pre-Blackwell | 16-entry LUT | ✅ |
 | TF32 → FP16 | sm_75 / sm_70 | truncate mantissa + clamp | ✅ |
 | FP6 → FP16/INT8 | sm_75 / sm_86 | LUT + re-bias | 🔜 |
+| Fused decode+load GEMM | sm_75 / sm_86 | decode in shared memory | ⚠️ see docs/phase3-fusion-findings.md |
 
 ## The core idea
 
@@ -47,9 +48,9 @@ weights stored as FP8 (1 byte)          native format for this arch
 
 ```
 include/tensor_bridge/   header-only conversion primitives (fp8.h, bf16.h, fp4.h, tf32.h)
-src/                     tensor-core GEMM kernels (fp16 path, int8 path)
+src/                     tensor-core GEMM kernels (fp16 path, int8 path) + fused variants
 bench/                   benchmark harness (formats × archs × sizes)
-docs/                    nvcc-fill-fragment-bug.md — the compiler bug we found & worked around
+docs/                    nvcc-fill-fragment-bug.md, phase3-fusion-findings.md
 ```
 
 ## Quickstart

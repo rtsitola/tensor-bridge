@@ -26,21 +26,6 @@ __device__ __host__ __forceinline__ half fp8_e4m3_to_half(uint8_t f8) {
     return __ushort_as_half(sign | exp16 | man);
 }
 
-// Single-cycle LOP3 variant: pack 2 FP8 bytes -> one FP16 half2.
-// out = (packed<<3) OR (mantissa_mask AND bias_inject), LUT 0xEA = A OR (B AND C).
-__device__ __forceinline__ half2 fp8_e4m3_pair_to_half2_lop3(uint16_t packed) {
-    const uint32_t mask_fp8 = 0x03E003E0u;   // isolate FP8 mantissa bits for both halves
-    const uint32_t bias_inj = 0x38003800u;   // exponent bias +8 into both FP16 exp slots
-    uint32_t out;
-    asm volatile("lop3.b32 %0, %1, %2, %3, 0xEA;"
-                 : "=r"(out)
-                 : "r"(((uint32_t)packed) << 3), "r"(mask_fp8), "r"(bias_inj));
-    half2 h;
-    h.x = __ushort_as_half((uint16_t)out);
-    h.y = __ushort_as_half((uint16_t)(out >> 16));
-    return h;
-}
-
 // ---- FP8 E5M2 -> FP16 (same exponent bias 15, just zero-extend mantissa) -----
 __device__ __host__ __forceinline__ half fp8_e5m2_to_half(uint8_t f8) {
     uint16_t sign = (uint16_t)(f8 & 0x80u) << 8;

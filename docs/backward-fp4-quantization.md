@@ -57,5 +57,19 @@ optimization objective from *weight fidelity* to *output fidelity*.
 
 ## Cross-check
 
-Being validated by parallel research (NVIDIA docs, GitHub bitsandbytes/GPTQ/AWQ/llama.cpp,
-Reddit, arxiv). Expected to confirm this is the GPTQ/AdaRound family of methods.
+Validated against the existing literature — this is a known, published family of methods:
+
+- **LLM-FP4** (arxiv 2310.16836, EMNLP 2023, [github/nbasyl/LLM-FP4](https://github.com/nbasyl/LLM-FP4)):
+  a search-based framework for optimal exponent bias + max quantization value, plus
+  pre-shifted exponent bias for inter-channel variance. **This is exactly the backward
+  approach** — optimize the quantization params for output fidelity, post-training.
+- **GPTQ** (arxiv 2203.11005), **AWQ** (arxiv 2306.00978), **AdaRound**
+  (arxiv 2004.10568): the broader family — minimize output error, not weight error.
+- **NVIDIA TensorRT-LLM `fp4Quantize.cpp`**: confirms the scale `448*6/max` and NVFP4
+  block size 16.
+- **sheng-qin/FP-Quant**: impl of "Bridging the Gap Between Promise and Performance for
+  Microscaling FP4" (arxiv 2509.23202).
+
+So the user-proposed backward idea is not just valid — it's the core of published
+low-bit floating-point quantization (EMNLP 2023). The repo's contribution is applying it
+to the FP4 grid constraint with a clean, cheap, offline coordinate-descent solver.

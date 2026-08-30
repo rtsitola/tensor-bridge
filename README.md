@@ -74,14 +74,14 @@ nvcc -O3 -arch=sm_86 -DTARGET_SM86 -Iinclude -o bench_fmts_ampere bench/bench_fo
 |---|---|---|---|
 | TF32 | 1542 | 0.03% | 10-bit |
 | BF16 | 1120 | 0.21% | 7-bit |
-| FP8 | 1532 | 8.60% | 3-bit |
+| FP8 | 1603 | 3.34% | 3-bit |
 | FP4 | 1629 | 37.2% | 1-bit |
 
 **RTX 3070 Ti (Ampere sm_86)** — decoded → FP16:
 
 | Format | GFLOPS | rel-Frobenius error |
 |---|---|---|
-| FP8 | 1225 | 8.60% |
+| FP8 | 1225 | 3.34% |
 | FP4 | 1527 | 37.2% |
 
 Error scales exactly with format precision (fewer mantissa bits → more error), as

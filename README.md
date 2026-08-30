@@ -88,24 +88,34 @@ Frobenius error reported). See `bench/bench_formats.cu`.
 > never overflows here. The INT8 kernel now takes an explicit `scale` param — pass
 > `127/maxabs` for real weights (E4M3 reaches ±448; a fixed ×8 wraps int8 at |v|>15.9).
 
-**Quadro RTX 6000 (Turing sm_75)** — all decoded → FP16:
+**Quantization vs inference error.** Two measures, per Grok review:
+- `err(qA@qB)` — both operands quantized (worst case, what the format can do if
+  you quantize everything)
+- `err(qA@B_fp16)` — only A (the weights) quantized, B (activations) stays FP16.
+  This is the realistic inference case `W_q @ X_fp16`.
 
-| Format | GFLOPS | rel-Frobenius error | mantissa |
-|---|---|---|---|
-| TF32 | 1542 | 0.03% | 10-bit |
-| BF16 | 1120 | 0.21% | 7-bit |
-| FP8 | 1603 | 3.34% | 3-bit |
-| FP4 | 1575 | 37.2% | 1-bit |
+**Quadro RTX 6000 (Turing sm_75)** — decoded → FP16:
+
+| Format | GFLOPS | err(qA@qB) | err(qA@B_fp16) | mantissa |
+|---|---|---|---|---|
+| TF32 | 1036 | 0.03% | 0.03% | 10-bit |
+| BF16 | 810 | 0.21% | 0.15% | 7-bit |
+| FP8 | 927 | 3.34% | 2.37% | 3-bit |
+| FP4 | 1002 | 37.2% | 24.9% | 1-bit |
 
 **RTX 3070 Ti (Ampere sm_86)** — decoded → FP16:
 
-| Format | GFLOPS | rel-Frobenius error |
-|---|---|---|
-| FP8 | 1225 | 3.34% |
-| FP4 | 1896 | 37.2% |
+| Format | GFLOPS | err(qA@qB) | err(qA@B_fp16) |
+|---|---|---|---|
+| FP8 | 865 | 3.34% | 2.37% |
+| FP4 | 1314 | 37.2% | 24.9% |
 
-Error scales exactly with format precision (fewer mantissa bits → more error), as
-expected for quantization.
+Error scales with format precision, as expected. Quantizing only the weights (the
+inference case) roughly halves the error vs quantizing both. Note these are
+`rand ∈ [-1,1]` uniform tensors — real weights are usually ≪ 1 and better behaved.
+FP8/FP4 would improve further with a per-tensor or per-channel scale; FP4 really
+needs a block scale (OCP MXFP4 / NVFP4) to be usable, since naked E2M1 on [-1,1]
+only has {0, ±0.5, ±1}.
 
 ## The compiler bug we documented
 

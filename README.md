@@ -96,26 +96,27 @@ Frobenius error reported). See `bench/bench_formats.cu`.
 
 **Quadro RTX 6000 (Turing sm_75)** — decoded → FP16:
 
-| Format | GFLOPS | err(qA@qB) | err(qA@B_fp16) | mantissa |
-|---|---|---|---|---|
-| TF32 | 1036 | 0.03% | 0.03% | 10-bit |
-| BF16 | 810 | 0.21% | 0.15% | 7-bit |
-| FP8 | 927 | 3.34% | 2.37% | 3-bit |
-| FP4 | 1002 | 37.2% | 24.9% | 1-bit |
+| Format | GFLOPS | err(qA@qB) | err(qA@B_fp16) | err(per-tensor scale) | mantissa |
+|---|---|---|---|---|---|
+| TF32 | 1055 | 0.03% | 0.03% | — | 10-bit |
+| BF16 | 820 | 0.21% | 0.15% | — | 7-bit |
+| FP8 | 949 | 3.34% | 2.37% | 2.54% | 3-bit |
+| FP4 | 1013 | 37.2% | 24.9% | **11.0%** | 1-bit |
 
 **RTX 3070 Ti (Ampere sm_86)** — decoded → FP16:
 
-| Format | GFLOPS | err(qA@qB) | err(qA@B_fp16) |
-|---|---|---|---|
-| FP8 | 865 | 3.34% | 2.37% |
-| FP4 | 1314 | 37.2% | 24.9% |
+| Format | GFLOPS | err(qA@qB) | err(qA@B_fp16) | err(per-tensor scale) |
+|---|---|---|---|---|
+| FP8 | 899 | 3.34% | 2.37% | 2.54% |
+| FP4 | 1177 | 37.2% | 24.9% | **11.0%** |
 
 Error scales with format precision, as expected. Quantizing only the weights (the
-inference case) roughly halves the error vs quantizing both. Note these are
+inference case) roughly halves the error vs quantizing both. A per-tensor scale
+(quantize `v * FORMAT_MAX/maxabs`, dequant `/scale`) helps FP4 most: **24.9% → 11.0%**
+by recovering the format's dynamic range (naked E2M1 on [-1,1] collapses to
+{0, ±0.5, ±1}). FP8 barely moves (scale≈448 is near-identity on [-1,1]). These are
 `rand ∈ [-1,1]` uniform tensors — real weights are usually ≪ 1 and better behaved.
-FP8/FP4 would improve further with a per-tensor or per-channel scale; FP4 really
-needs a block scale (OCP MXFP4 / NVFP4) to be usable, since naked E2M1 on [-1,1]
-only has {0, ±0.5, ±1}.
+FP4 needs a block scale (OCP MXFP4 / NVFP4) to go further.
 
 ## The compiler bug we documented
 

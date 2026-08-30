@@ -1,5 +1,11 @@
 # tensor-bridge
 
+<p align="center">
+  <img src="assets/tensor-bridge-banner.jpg" alt="tensor-bridge — FP8/FP4/BF16/TF32 across tensor-core architectures" width="400"/>
+  <br/>
+  <em>FP8, FP4, BF16, TF32 — the new-gen formats, decoded on legacy tensor cores.</em>
+</p>
+
 > Run new-generation numeric formats (FP8, FP4, BF16, TF32) on **old tensor cores** that
 > never shipped them.
 
